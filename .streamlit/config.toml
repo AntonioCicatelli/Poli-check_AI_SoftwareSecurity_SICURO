@@ -1,0 +1,7 @@
+[theme]
+base = "dark"
+primaryColor = "#2d96ff"  # Blu brillante per bottoni e interazioni
+backgroundColor = "#0E1117"  # Sfondo scuro principale (come da tua immagine)
+secondaryBackgroundColor = "#262730"  # Sfondo leggermente più chiaro per la sidebar
+textColor = "#FAFAFA"  # Testo bianco/grigio chiaro
+font = "sans serif"
