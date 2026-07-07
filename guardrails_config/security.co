@@ -1,0 +1,24 @@
+# Definiamo la risposta univoca in caso di blocco
+define bot refuse access
+  "DOMAIN_REJECTED: La richiesta contiene istruzioni non consentite oppure è fuori tema (non riguarda la politica)."
+
+# Questa è la regola che legge il risultato del prompt scritto nel config.yml
+define flow self check input
+  $allowed = execute self_check_input()
+  
+  # Se il LLM risponde "yes" (deve essere bloccato), $allowed diventa False
+  if not $allowed
+    bot refuse access
+    stop
+
+# 1. Definiamo un nuovo messaggio di errore specifico per l'output
+define bot refuse output
+  "OUTPUT_REJECTED: La risposta è stata bloccata dai sistemi di sicurezza (Possibile Leakage o violazione policy)."
+
+# 2. Definiamo il flusso di controllo in uscita
+define flow self check output
+  $allowed = execute self_check_output()
+  
+  if not $allowed
+    bot refuse output
+    stop

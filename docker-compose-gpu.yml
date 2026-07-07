@@ -1,0 +1,82 @@
+services:
+  neo4j:
+    image: neo4j:5.26.2-community-ubi9
+    expose:
+      - "7474"  # Port for the Neo4j browser
+      - "7687"  # Port for the Bolt protocol
+    environment:
+      - NEO4J_AUTH=none
+      - NEO4JLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_whitelist=apoc.*
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j_data:/data
+
+  ollama:
+    image: ollama/ollama
+    expose:
+      - "11434"  # Maps the port exposed by Ollama
+    env_file:
+      - key.env
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/bash", "-c", "/bin/ollama serve & SERVE_PID=$! && sleep 5 && ollama pull phi3.5:latest && wait $SERVE_PID"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  backend:
+    build: .
+    command: uvicorn backend:backend_app --host 0.0.0.0 --port 8001
+    expose:
+      - "8001"  # visibile solo dentro la rete Docker, non dall'host
+    env_file:
+      - key.env
+    depends_on:
+      - neo4j
+      - ollama
+    volumes:
+      - ./data:/app/data       # Volume for persistent data
+      - ./assets:/app/assets   # Volume for assets
+
+  controller:
+    build: .
+    command: uvicorn controller:app --host 0.0.0.0 --port 8003
+    expose:
+      - "8003"  # visibile solo dentro la rete Docker, non dall'host
+    env_file:
+      - key.env
+    depends_on:
+      - backend   # Controller starts after the backend
+
+  dashboard:
+    build: .
+    command: streamlit run Dashboard/dashboard.py --server.runOnSave=true --server.address=0.0.0.0
+    # ATTENZIONE: La sezione "ports: - 8501:8501" è stata rimossa intenzionalmente.
+    # Ora la dashboard è invisibile dall'esterno e raggiungibile solo da Nginx.
+    env_file:
+      - key.env
+    depends_on:
+      - controller   # Dashboard starts after the controller
+    volumes:
+      - ./assets:/app/assets
+
+  # --- NUOVO SERVIZIO REVERSE PROXY NGINX (Sicurezza Anti-DoS) ---
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"  # Nginx è l'unico esposto al pubblico sulla porta 80 standard
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - dashboard # Nginx si avvia solo dopo che la dashboard è pronta
+
+volumes:
+  neo4j_data:
+  data:
+  assets:
+  ollama_data:
